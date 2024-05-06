@@ -1,0 +1,369 @@
+---
+title: "Data Visualization Final Project Dashboard"
+author: "Connor Landreth"
+date: "2024-04-25"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=12, fig.height=8)
+```
+
+```{r}
+library(tidyverse)
+library(ggthemes)
+library(shiny)
+library(shinythemes)
+library(ggplot2)
+library(dplyr)
+library(viridis)
+
+```
+
+
+
+```{r}
+# Example of using a URL for a GitHub-hosted raw file
+url <- "https://raw.githubusercontent.com/ConnorLandreth/Spring24_Data_Viz/ConnorLandreth/Salary_Data.csv"
+SD <- read.csv(url)
+
+
+avgsal <- SD %>% 
+  group_by(Age) %>% 
+  summarize(avg_salary = mean(Salary)) %>% 
+  filter(!(Age %in% c(26, 31, 36)))
+
+avgyr <- SD %>% 
+  group_by(Years.of.Experience) %>% 
+  summarize(avg_salary = mean(Salary)) %>% 
+  filter(!(Years.of.Experience %in% c(6, 8)))
+
+
+
+
+
+# Identify the top 8 job titles
+top_job_titles <- SD %>%
+  group_by(Job.Title) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  slice_head(n = 6) %>%
+  pull(Job.Title)
+
+# Filter the data for the top 8 job titles
+filtered_data <- SD %>%
+  filter(Job.Title %in% top_job_titles)
+
+
+
+SD <- SD %>%
+  mutate(Education.Level = case_when(
+    grepl("Bachelor", Education.Level, ignore.case = TRUE) ~ "Bachelor's",
+    grepl("Master", Education.Level, ignore.case = TRUE) ~ "Master's",
+    TRUE ~ as.character(Education.Level)
+  ))
+
+
+
+
+SD$Education.Level <- factor(SD$Education.Level, levels = c("PhD", "Master's", "Bachelor's", "High School"))
+
+# Filter the data for the top 8 job titles
+filtered_data <- SD %>%
+  filter(Job.Title %in% top_job_titles)
+
+
+
+```
+
+
+
+
+```{r}
+
+# List of state names
+states <- c("alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut", "delaware", "florida", "georgia", 
+            "hawaii", "idaho", "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", 
+            "michigan", "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire", "new jersey", 
+            "new mexico", "new york", "north carolina", "north dakota", "ohio", "oklahoma", "oregon", "pennsylvania", "rhode island", 
+            "south carolina", "south dakota", "tennessee", "texas", "utah", "vermont", "virginia", "washington", "west virginia", 
+            "wisconsin", "wyoming")
+
+# Assign a random state to each row in SD
+set.seed(123)  # Set seed for reproducibility
+SD$state <- sample(states, size = nrow(SD), replace = TRUE)
+
+# Convert state names to lowercase for consistency
+SD$state <- tolower(SD$state)
+
+# Check the structure of SD to ensure the 'state' column is created correctly
+str(SD)
+
+
+
+# Convert state names to lowercase for consistency
+SD$state <- tolower(SD$state)
+
+# Calculate average salary by state
+average_salary <- SD %>%
+  group_by(state) %>%
+  summarise(average_salary = mean(Salary, na.rm = TRUE))
+
+# Map of US states
+map_us <- map_data("state")
+
+# Merge average salary data with the map data
+merged_data <- left_join(map_us, average_salary, by = c("region" = "state"))
+
+
+```
+
+
+
+
+## Final Dashboard for Presentation
+```{r}
+ui <- fluidPage(
+  theme = shinytheme("journal"),
+  titlePanel("Corporate Careers Summary Dashboard (US)"),
+  
+  tabsetPanel(
+    tabPanel("Salary Information", 
+             fluidRow(
+               column(6, plotOutput("educationLevelPlot")),
+               column(6, plotOutput("salaryPlot"))
+             ),
+             fluidRow(
+               column(12, plotOutput("ageExperiencePlot"))
+             )
+    ),
+    tabPanel("Salary Map",
+             fluidRow(
+               column(12, plotOutput("salaryMapPlot", height = "800px"))
+             )
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  
+  # Global theme setting
+  theme_set(theme_minimal(base_size = 14) + theme(
+    axis.text = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ))
+  
+  # Define a consistent color palette
+  color_palette <- c("0-49,999" = "purple4", "50,000-99,999" = "royalblue", "100,000-149,999" = "turquoise4", "150,000+" = "yellow4")
+  
+  # Visualization for One Categorical & One Numerical - multi
+  output$salaryPlot <- renderPlot({
+    top_job_titles <- SD %>%
+      group_by(Job.Title) %>%
+      summarize(count = n()) %>%
+      arrange(desc(count)) %>%
+      slice_head(n = 6) %>%
+      pull(Job.Title)
+    
+    filtered_data <- SD %>%
+      filter(Job.Title %in% top_job_titles)
+    
+    ggplot(filtered_data, aes(x = Job.Title, y = Salary)) +
+      geom_boxplot(fill = "turquoise4", color = "black") +
+      labs(title = "Salaries for Top 6 Job Titles",
+           subtitle = "United States, 2022",
+           caption = "Source: Kaggle",
+           x = "Job Title", y = "Salary") +
+      annotate("text", x = 'Senior Project Engineer', y = 50000, label = "Mean compensation for top professions: $149,833", hjust = 1.1, vjust = 1.1, size = 4, colour = "red")
+  })
+  
+  # Visualization for Two Numerical - multi with salary bins
+  output$ageExperiencePlot <- renderPlot({
+    SD$SalaryBins <- cut(SD$Salary,
+                         breaks = c(0, 50000, 100000, 150000, Inf),
+                         labels = c("0-49,999", "50,000-99,999", "100,000-149,999", "150,000+"),
+                         include.lowest = TRUE)
+    
+    ggplot(SD, aes(x = Age, y = Years.of.Experience, color = SalaryBins)) +
+      geom_point(size = 3) +
+      labs(title = "Age vs. Years of Experience",
+           subtitle = "United States, 2022",
+           caption = "Source: Kaggle",
+           x = "Age", y = "Years of Experience", color = "Salary Range") +
+      scale_color_manual(values = color_palette)
+  })
+  
+  # Adjusted Visualization for One Categorical Variable - uni
+  output$educationLevelPlot <- renderPlot({
+    data <- SD %>% filter(!is.na(Education.Level))
+    max_count <- max(table(SD$Education.Level))  # Calculate the maximum count
+    ggplot(data, aes(x = Education.Level)) +
+      geom_bar(fill = "turquoise4", color = "black") +
+      geom_text(stat = 'count', aes(label = ..count..), vjust = -1.5, color = "black") +  # Display count above bars
+      labs(title = "Distribution of Education Levels",
+           subtitle = "United States, 2022",
+           caption = "Source: Kaggle",
+           x = "Education Level", y = "") +
+      ylim(0, max_count * 1.2) +  # Extend the y-axis to fit labels
+      annotate("text", x = "PhD", y = 2500, label = "45.1% of degree holders have a\nbachelor's degree", size = 3.25, colour = "red")
+  })
+  
+  # Plotting the map with fill color based on average salary
+  output$salaryMapPlot <- renderPlot({
+    ggplot(merged_data, aes(x = long, y = lat, group = group, fill = average_salary)) +
+      geom_polygon(color = "white", size = 0.1) +
+      scale_fill_viridis() +
+      labs(title = "Average Salary by State",
+           subtitle = "United States, 2022",
+           caption = "Source: Kaggle",
+           fill = "Average Salary") +
+      coord_map()
+  })
+}
+
+# Running the app
+shinyApp(ui = ui, server = server)
+
+
+```
+
+
+
+
+```{r}
+
+
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(shinythemes)
+
+# Define color palette
+color_palette <- c("0-49,999" = "purple4", "50,000-99,999" = "royalblue", 
+                   "100,000-149,999" = "turquoise4", "150,000+" = "yellow4")
+
+# Define UI
+ui <- fluidPage(
+  theme = shinytheme("journal"),
+  titlePanel("Corporate Careers Summary Dashboard (US)"),
+  
+  tabsetPanel(
+    tabPanel("Salary Information", 
+             fluidRow(
+               column(6, plotOutput("educationLevelPlot")),
+               column(6, plotOutput("salaryPlot"))
+             ),
+             fluidRow(
+               column(12, plotOutput("ageExperiencePlot"))
+             )
+    ),
+    tabPanel("Salary Map",
+             fluidRow(
+               column(12, plotOutput("salaryMapPlot", height = "800px"))
+             )
+    )
+  )
+)
+
+# Define server logic
+server <- function(input, output, session) {
+  
+  observe({
+    
+    # Visualization for One Categorical & One Numerical - multi
+    output$salaryPlot <- renderPlot({
+      top_job_titles <- SD %>%
+        group_by(Job.Title) %>%
+        summarize(count = n()) %>%
+        arrange(desc(count)) %>%
+        slice_head(n = 6) %>%
+        pull(Job.Title)
+      
+      filtered_data <- SD %>%
+        filter(Job.Title %in% top_job_titles)
+      
+      gg <- ggplot(filtered_data, aes(x = Job.Title, y = Salary)) +
+        geom_boxplot(fill = "turquoise4", color = "black") +
+        labs(title = "Salaries for Top 6 Job Titles",
+             subtitle = "United States, 2022",
+             caption = "Source: Kaggle",
+             x = "Job Title", y = "Salary") +
+        annotate("text", x = 'Senior Project Engineer', y = 50000, label = "Mean compensation for top professions: $149,833", hjust = 1.1, vjust = 1.1, size = 4, colour = "red")
+      
+      print(gg) # Print ggplot object
+      
+      # Save the plot as an RDS file
+      saveRDS(gg, "salary_plot.rds")
+    })
+    
+    # Visualization for Two Numerical - multi with salary bins
+    output$ageExperiencePlot <- renderPlot({
+      SD$SalaryBins <- cut(SD$Salary,
+                           breaks = c(0, 50000, 100000, 150000, Inf),
+                           labels = c("0-49,999", "50,000-99,999", "100,000-149,999", "150,000+"),
+                           include.lowest = TRUE)
+      
+      gg <- ggplot(SD, aes(x = Age, y = Years.of.Experience, color = SalaryBins)) +
+        geom_point(size = 3) +
+        labs(title = "Age vs. Years of Experience",
+             subtitle = "United States, 2022",
+             caption = "Source: Kaggle",
+             x = "Age", y = "Years of Experience", color = "Salary Range") +
+        scale_color_manual(values = color_palette)
+      
+      print(gg) # Print ggplot object
+      
+      # Save the plot as an RDS file
+      saveRDS(gg, "age_experience_plot.rds")
+    })
+    
+    # Adjusted Visualization for One Categorical Variable - uni
+    output$educationLevelPlot <- renderPlot({
+      data <- SD %>% filter(!is.na(Education.Level))
+      max_count <- max(table(SD$Education.Level))  # Calculate the maximum count
+      gg <- ggplot(data, aes(x = Education.Level)) +
+        geom_bar(fill = "turquoise4", color = "black") +
+        geom_text(stat = 'count', aes(label = ..count..), vjust = -1.5, color = "black") +  # Display count above bars
+        labs(title = "Distribution of Education Levels",
+             subtitle = "United States, 2022",
+             caption = "Source: Kaggle",
+             x = "Education Level", y = "") +
+        ylim(0, max_count * 1.2) +  # Extend the y-axis to fit labels
+        annotate("text", x = "PhD", y = 2500, label = "45.1% of degree holders have a\nbachelor's degree", size = 3.25, colour = "red")
+      
+      print(gg) # Print ggplot object
+      
+      # Save the plot as an RDS file
+      saveRDS(gg, "education_level_plot.rds")
+    })
+    
+    # Plotting the map with fill color based on average salary
+    output$salaryMapPlot <- renderPlot({
+      gg <- ggplot(merged_data, aes(x = long, y = lat, group = group, fill = average_salary)) +
+        geom_polygon(color = "white", size = 0.1) +
+        scale_fill_viridis() +
+        labs(title = "Average Salary by State",
+             subtitle = "United States, 2022",
+             caption = "Source: Kaggle",
+             fill = "Average Salary") +
+        coord_map()
+      
+      print(gg) # Print ggplot object
+      
+      # Save the plot as an RDS file
+      saveRDS(gg, "salary_map_plot.rds")
+    })
+  })
+}
+
+# Running the app
+shinyApp(ui = ui, server = server)
+
+
+
+```
+

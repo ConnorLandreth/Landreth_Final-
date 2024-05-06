@@ -1,0 +1,77 @@
+---
+title: "Landreth Final Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    sidebar:
+      width: 250
+---
+
+
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+
+```
+
+## Introduction {.sidebar}
+
+```{css}
+.sidebar {
+  max-width: 300px; /* Adjust the maximum width as needed */
+  word-wrap: break-word;
+}
+```
+Preparing the dashboard based on the instructions given at @magallanes_reyes_data_2022, and @sievert_flexdashboard_2022
+
+`---`
+
+### References
+```{css}
+.sidebar {
+  max-width: 300px; /* Adjust the maximum width as needed */
+  word-wrap: break-word;
+}
+```
+- Aden-Buie, Garrick, Carson Sievert, Richard Iannone, JJ Allaire, and Barbara Borges. 2023. "Flexdashboard: R Markdown Format for Flexible Dashboards." Manual. https://pkgs.rstudio.com/flexdashboard/.
+- Magallanes Reyes, José Manual. 2022. Data Visualization for Social and Policy Research: A Step-by-Step Approach Using R and Python. Cambridge: Cambridge University Press
+
+
+```{r}
+# Load plots
+salary_plot <- readRDS("~/GitHub/Landreth_Final/salary_plot.rds")
+education_level_plot <- readRDS("~/GitHub/Landreth_Final/education_level_plot.rds")
+age_experience_plot <- readRDS("~/GitHub/Landreth_Final/age_experience_plot.rds")
+salary_map_plot <- readRDS("~/GitHub/Landreth_Final/salary_map_plot.rds")
+```
+
+# Top Paying Jobs
+
+```{r}
+salary_plot
+```
+
+
+
+# Education Levels
+
+```{r}
+education_level_plot
+```
+
+
+# Salary by Age & YOE
+```{r}
+age_experience_plot
+
+```
+
+
+# Salary Map
+
+```{r}
+salary_map_plot
+
+```
+
